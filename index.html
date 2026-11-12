@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="uk"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Лабіринт</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html,body{margin:0;height:100%;background:#111;overflow:hidden;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;touch-action:none}
+body{display:flex;align-items:center;justify-content:center;position:relative}
+canvas{display:block}
+
+/* Стилі для початкового вікна з історією */
+#intro-overlay{
+ position:fixed;
+ inset:0;
+ background:rgba(10,10,14,0.86);
+ backdrop-filter:blur(5px);
+ -webkit-backdrop-filter:blur(5px);
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ z-index:100;
+ padding:20px;
+ transition:opacity 0.4s ease;
+}
+.intro-card{
+ max-width:640px;
+ width:100%;
+ background:rgba(24,24,32,0.95);
+ border:1px solid rgba(155,48,217,0.45);
+ border-radius:16px;
+ padding:32px 36px;
+ box-shadow:0 20px 50px rgba(0,0,0,0.85), 0 0 30px rgba(155,48,217,0.2);
+ text-align:center;
+ color:#f0f0f5;
+}
+.intro-card p{
+ font-size:1.12rem;
+ line-height:1.68;
+ margin:0 0 28px 0;
+ color:#e2e2ec;
+ text-align:left;
+}
+#help-btn{
+ background:linear-gradient(135deg,#9b30d9,#721ca8);
+ color:#fff;
+ border:none;
+ border-radius:10px;
+ padding:14px 38px;
+ font-size:1.15rem;
+ font-weight:600;
+ cursor:pointer;
+ letter-spacing:0.5px;
+ box-shadow:0 6px 20px rgba(155,48,217,0.45);
+ transition:transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+#help-btn:hover{
+ transform:translateY(-2px);
+ box-shadow:0 8px 25px rgba(155,48,217,0.65);
+ filter:brightness(1.1);
+}
+#help-btn:active{
+ transform:translateY(0);
+}
+
+/* Мобільні стрілочки в лівому нижньому кутку зі стилізованими SVG */
+#dpad{
+ position:absolute;
+ bottom:20px;
+ left:20px;
+ width:150px;
+ height:150px;
+ display:none;
+ z-index:50;
+ user-select:none;
+ -webkit-user-select:none;
+ pointer-events:none;
+}
+.d-btn{
+ position:absolute;
+ background:rgba(155,48,217,0.22);
+ border:1.5px solid rgba(155,48,217,0.55);
+ backdrop-filter:blur(4px);
+ color:#fff;
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ border-radius:14px;
+ cursor:pointer;
+ pointer-events:auto;
+ transition:background 0.1s, transform 0.1s, border-color 0.1s;
+ -webkit-tap-highlight-color: transparent;
+ box-shadow:0 4px 12px rgba(0,0,0,0.3);
+}
+.d-btn svg {
+ width: 28px;
+ height: 28px;
+ fill: #e8d0f5;
+ filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+ transition: fill 0.1s;
+}
+.d-btn:active, .d-btn.active{
+ background:rgba(155,48,217,0.65);
+ border-color:rgba(210,100,255,0.9);
+ transform:scale(0.92);
+}
+.d-btn:active svg, .d-btn.active svg {
+ fill: #ffffff;
+}
+
+#btn-up{ top:0; left:50px; width:50px; height:50px; }
+#btn-left{ top:50px; left:0; width:50px; height:50px; }
+#btn-right{ top:50px; left:100px; width:50px; height:50px; }
+#btn-down{ top:100px; left:50px; width:50px; height:50px; }
+
+/* Цифрова клавіатура для сейфа */
+#numpad{
+ position:absolute;
+ bottom:20px;
+ left:50%;
+ transform:translateX(-50%);
+ display:none;
+ grid-template-columns:repeat(3, 64px);
+ gap:10px;
+ z-index:60;
+ background:rgba(20,20,25,0.9);
+ padding:15px;
+ border-radius:16px;
+ border:1px solid rgba(155,48,217,0.4);
+ backdrop-filter:blur(8px);
+}
+.num-btn{
+ background:rgba(155,48,217,0.2);
+ border:1px solid rgba(155,48,217,0.5);
+ color:#fff;
+ font-size:22px;
+ font-weight:600;
+ height:52px;
+ border-radius:10px;
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ cursor:pointer;
+ -webkit-tap-highlight-color: transparent;
+ transition:background 0.1s;
+}
+.num-btn:active{
+ background:rgba(155,48,217,0.5);
+}
+</style></head><body>
+<canvas id="c"></canvas>
+
+<!-- Віртуальні стрілочки керування зі стилізованими SVG -->
+<div id="dpad">
+ <div class="d-btn" id="btn-up"><svg viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z"/></svg></div>
+ <div class="d-btn" id="btn-left"><svg viewBox="0 0 24 24"><path d="M14 7l-5 5 5 5z"/></svg></div>
+ <div class="d-btn" id="btn-right"><svg viewBox="0 0 24 24"><path d="M10 7l5 5-5 5z"/></svg></div>
+ <div class="d-btn" id="btn-down"><svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg></div>
+</div>
+
+<!-- Екранна цифрова клавіатура -->
+<div id="numpad">
+ <div class="num-btn" data-val="1">1</div>
+ <div class="num-btn" data-val="2">2</div>
+ <div class="num-btn" data-val="3">3</div>
+ <div class="num-btn" data-val="4">4</div>
+ <div class="num-btn" data-val="5">5</div>
+ <div class="num-btn" data-val="6">6</div>
+ <div class="num-btn" data-val="7">7</div>
+ <div class="num-btn" data-val="8">8</div>
+ <div class="num-btn" data-val="9">9</div>
+ <div class="num-btn" data-val="del" style="font-size:16px;">⌫</div>
+ <div class="num-btn" data-val="0">0</div>
+ <div class="num-btn" data-val="esc" style="font-size:14px;">✕</div>
+</div>
+
+<!-- Накладення з передісторією -->
+<div id="intro-overlay">
+ <div class="intro-card">
+  <p>Завдяки вашим свідченням та, здебільшого, власній інтуїції Андрій Харін дізнався, хто зробив замах на нього. Використовуючи свої технологічні здібності, Андрій з легкістю спіймав нападників, а в покарання закрив у гімназії, проте розлюченому Андрію цього було недостатньо, та й сам розумів що вийти з гімназії не так уж і варто. Тому він одягнув на них VR-окуляри, і вже там вони мали втекти з його в'язниці. Він закодив пару пасток та загадок аби ускладнити завдання, налякані дівчата просять вас допомоги. Знайдіть вихід з цієї віртуальної в'язниці!</p>
+  <button id="help-btn">Допомогти!</button>
+ </div>
+</div>
+
+<script>
+const HW=["11111111111111111111111111111111111111111", "01111110110001011101011111100100110011010", "01111100010011001100000011000000000110000", "11101110000011000000000110000110000000110", "11001111000001000001000100100110100000000", "00000011000011100100010000000001110010000", "00001001001110111100111100000001111111001", "10111001111111001101011111000011110011100", "01110000111111101100001001001100110001000", "11010000011111000100000110101001110000110", "00100011011111001110011111100000011000111", "01110011001010000111001111111100010000000", "11101101111010011111100011111000000010101", "10111101110100011000101001001001001001110", "00110111110000011000000000000000111100100", "11110111010001001000000000000000010011000", "00111100000000011011100000011001000011110", "00001101110000111001111000111001000111111", "00001000111100011100011001111111111111010", "10000000011100001001001011111110000110110", "00101101011101000111111001110110000000011", "10111101111111010101111111101111000000000", "10111011100111110000001110000111000010000", "00011011101111100000000100110111110100100", "00111111111110000001001101111001111000001", "00010111001110000100011111111001011011101", "11110011011111011110110111100101011111100", "11111111111111111111111111111111111111111"],VW=["100000010001100000101000000010010001000001", "110000011011101100001111000111111010001111", "100000011101000110111110001111011111011101", "100100001111101111111111011110001111111011", "101110000111100111110011110111110011111111", "111111101110000010011000111111100001001111", "110100100110001100111000001111100001000101", "110001110000000100001100100110010001100111", "100011111000001110111111001100110011110011", "101011101000000110011100100110110001111001", "110011000100101110011100000011111101111001", "100010110101001100000111000000111101111111", "100000000000011100110001100100111111010010", "111001000011111000111111111111110000100011", "100000000011111101111111111111111001111111", "100000011111110100100111111101111101000111", "111100110011111001100010110000110111000001", "111100110001011000111001111000100110000001", "111111111000111100110100100000000010001011", "101010111100011110000101100000011111011001", "111000100000001111000000100010001111111101", "100000100100000101111000001110000111111111", "111001000111000011111110011011000111011011", "111000100000000111110110110001000001111111", "110000000100011110111100010000101000001001", "101011001100001100011000000011110001000111", "100001000000000001000001000000001000000001"];
+const R=27,C=41,t=.5,P=1+t,M=1.5,H=.3,cv=document.getElementById('c'),ctx=cv.getContext('2d'),keys={};
+const hw=HW.map(s=>[...s].map(Number)),vw=VW.map(s=>[...s].map(Number));
+const MW=C*P+t,MH=R*P+t,WW=MW+2*M,HH=MH+2*M;
+const cx=c=>c*P+t+.5,cell=(r,c)=>r*C+c;
+const START=[14,0],STAIRS=[[16,5],[21,8]],LAVA=[[21,40],[22,40]],DOOR=[7,24],THIN=[12,40];
+let S=10,sp,px,py,fa=0,hasKey,hasRPG,solved,lavaOn,leverOn,thinOn,code,buf,mode,lockSafe,tpOk,t0,tEnd,msgT=0,msgS='',parts=[];
+
+const introOverlay = document.getElementById('intro-overlay');
+const helpBtn = document.getElementById('help-btn');
+const dpadEl = document.getElementById('dpad');
+const numpadEl = document.getElementById('numpad');
+
+function newGame(isInitial = false){
+ sp=new Map();
+ for(const [r,c] of LAVA)sp.set(cell(r,c),'lava');
+ sp.set(cell(...STAIRS[0]),'stairs');sp.set(cell(...STAIRS[1]),'stairs');
+ sp.set(cell(18,4),'key');sp.set(cell(9,21),'lever');sp.set(cell(23,40),'paper');
+ sp.set(cell(5,40),'safe');sp.set(cell(...DOOR),'door');
+ hw[THIN[0]][THIN[1]]=1;thinOn=true;
+ px=cx(START[1]);py=cx(START[0]);hasKey=hasRPG=solved=leverOn=false;lavaOn=true;
+ mode=isInitial ? 'intro' : 'play';
+ lockSafe=false;tpOk=true;
+ code=String(1000+Math.floor(Math.random()*9000));buf='';parts=[];t0=performance.now();
+ if(!isInitial) {
+  msg('WASD — рух. Знайди вихід у правій стіні лабіринту',5000);
+  dpadEl.style.display = 'block';
+ }
+}
+
+helpBtn.addEventListener('click', () => {
+ introOverlay.style.opacity = '0';
+ setTimeout(() => {
+  introOverlay.style.display = 'none';
+ }, 400);
+ mode = 'play';
+ t0 = performance.now();
+ dpadEl.style.display = 'block';
+ msg('WASD — рух. Знайди вихід у правій стіні лабіринту', 5000);
+});
+
+function msg(s,ms){msgS=s;msgT=performance.now()+ms}
+const ov=(x,y,a,b,w,h)=>x+H>a&&x-H<a+w&&y+H>b&&y-H<b+h;
+function hit(x,y){
+ const j0=Math.max(0,Math.floor((y-H)/P)-1),j1=Math.min(R,Math.floor((y+H)/P)+1);
+ const i0=Math.max(0,Math.floor((x-H)/P)-1),i1=Math.min(C,Math.floor((x+H)/P)+1);
+ for(let j=j0;j<=j1;j++)for(let c=i0;c<=Math.min(C-1,i1);c++)if(hw[j][c]&&ov(x,y,c*P,j*P,P+t,t))return true;
+ for(let r=Math.max(0,j0-1);r<=Math.min(R-1,j1);r++)for(let i=i0;i<=Math.min(C,i1);i++)if(vw[r][i]&&ov(x,y,i*P,r*P,t,P+t))return true;
+ if(!hasKey&&ov(x,y,DOOR[1]*P+t,DOOR[0]*P+t,1,1))return true;
+ if(x-H<0||y-H<0||y+H>MH||(x+H>MW&&Math.abs(y-cx(12))>.5))return true;
+ return false}
+function move(dx,dy){const n=Math.max(1,Math.ceil(Math.hypot(dx,dy)/.04));
+ for(let k=0;k<n;k++){if(dx&&!hit(px+dx/n,py))px+=dx/n;if(dy&&!hit(px,py+dy/n))py+=dy/n}}
+function boom(x,y){for(let i=0;i<50;i++){const a=Math.random()*6.28,s=1+Math.random()*6;parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,l:.8+Math.random()*.5,c:Math.random()<.5?'#ff7a00':'#ffd23f'})}}
+
+function update(dt){
+ for(const p of parts){p.x+=p.vx*dt;p.y+=p.vy*dt;p.l-=dt}parts=parts.filter(p=>p.l>0);
+ 
+ dpadEl.style.display = (mode==='play') ? 'block' : 'none';
+ numpadEl.style.display = (mode==='code') ? 'grid' : 'none';
+
+ if(mode!=='play')return;
+ let dx=0,dy=0;
+ if(keys.KeyW||keys.ArrowUp)dy-=1;if(keys.KeyS||keys.ArrowDown)dy+=1;if(keys.KeyA||keys.ArrowLeft)dx-=1;if(keys.KeyD||keys.ArrowRight)dx+=1;
+ if(dx||dy)fa=Math.atan2(dy,dx);
+ if(dx&&dy){dx*=.7071;dy*=.7071}
+ move(dx*6*dt,dy*6*dt);
+ const cc=Math.floor(px/P),rr=Math.floor(py/P);
+ const inCell=px-cc*P>=t&&py-rr*P>=t&&cc>=0&&cc<C&&rr>=0&&rr<R;
+ const k=inCell?cell(rr,cc):-1,ty=sp.get(k);
+ if(lavaOn)for(const [r,c] of LAVA)if(ov(px,py,c*P+t,r*P+t,1,1)){px=cx(START[1]);py=cx(START[0]);msg('Лава! Ти повернувся на початок',3000);break}
+ if(ty==='key'){sp.delete(k);hasKey=true;msg('Ти підібрав жовтий ключ',3000)}
+ if(ty==='lever'&&!leverOn){leverOn=true;lavaOn=false;msg('Важіль! Лава зникла',3500)}
+ if(ty==='paper')msg('Пароль: '+code,2500);
+ if(ty==='safe'){if(!solved&&!lockSafe){mode='code';buf='';lockSafe=true}}else lockSafe=false;
+ if(ty==='stairs'){if(tpOk){const a=cell(...STAIRS[0]),o=k===a?STAIRS[1]:STAIRS[0];px=cx(o[1]);py=cx(o[0]);tpOk=false;msg('Сходи',1200)}}else if(k>=0||true)tpOk=tpOk||ty!=='stairs';
+ if(hasRPG&&thinOn&&ov(px,py,THIN[1]*P-.25,THIN[0]*P-.25,P+t+.5,t+.5)){thinOn=false;hw[THIN[0]][THIN[1]]=0;boom(THIN[1]*P+P/2,THIN[0]*P+t/2);msg('БАХ! Вихід відкрито',3500)}
+ if(px>MW+.3){mode='win';tEnd=performance.now()}}
+
+function handleDigit(val){
+ if(val==='del'){buf=buf.slice(0,-1)}
+ else if(val==='esc'){mode='play';lockSafe=true}
+ else if(/^\d$/.test(val)&&buf.length<4){
+  buf+=val;
+  if(buf.length===4){
+   if(buf===code){solved=true;hasRPG=true;mode='play';msg('Тобі дали РПГ! Знищ ту тонку стіну',6000)}
+   else{mode='play';msg('Невірний пароль',2500)}
+  }
+ }
+}
+
+addEventListener('keydown',e=>{
+ if(mode==='intro'){
+  if(e.key==='Enter'||e.key===' '){helpBtn.click();e.preventDefault()}
+  return;
+ }
+ if(mode==='code'){
+  if(/^\d$/.test(e.key))handleDigit(e.key);
+  else if(e.key==='Backspace')handleDigit('del');
+  else if(e.key==='Escape')handleDigit('esc');
+  e.preventDefault();return;
+ }
+ if(mode==='win'&&e.key==='Enter'){newGame(false);return}
+ keys[e.code]=true});
+
+addEventListener('keyup',e=>{keys[e.code]=false});
+addEventListener('blur',()=>{for(const k in keys)keys[k]=false});
+
+const bindDpad = (id, keyCode) => {
+ const el = document.getElementById(id);
+ const activate = (e) => { e.preventDefault(); keys[keyCode] = true; el.classList.add('active'); };
+ const deactivate = (e) => { e.preventDefault(); keys[keyCode] = false; el.classList.remove('active'); };
+ el.addEventListener('touchstart', activate, {passive:false});
+ el.addEventListener('touchend', deactivate, {passive:false});
+ el.addEventListener('mousedown', activate);
+ el.addEventListener('mouseup', deactivate);
+ el.addEventListener('mouseleave', deactivate);
+};
+bindDpad('btn-up', 'KeyW');
+bindDpad('btn-left', 'KeyA');
+bindDpad('btn-right', 'KeyD');
+bindDpad('btn-down', 'KeyS');
+
+document.querySelectorAll('.num-btn').forEach(btn => {
+ const val = btn.getAttribute('data-val');
+ btn.addEventListener('click', () => handleDigit(val));
+ btn.addEventListener('touchstart', (e) => { e.preventDefault(); handleDigit(val); }, {passive:false});
+});
+
+function rs(){const d=devicePixelRatio||1;S=Math.min(innerWidth*d/WW,innerHeight*d/HH);
+ cv.width=Math.floor(WW*S);cv.height=Math.floor(HH*S);cv.style.width=cv.width/d+'px';cv.style.height=cv.height/d+'px'}
+addEventListener('resize',rs);
+
+function box(txt,y,fs){ctx.font=fs+'px sans-serif';ctx.textAlign='center';const w=ctx.measureText(txt).width+1.5;
+ ctx.fillStyle='rgba(0,0,0,.75)';ctx.fillRect(WW/2-w/2,y-fs,w,fs*1.5);ctx.fillStyle='#fff';ctx.fillText(txt,WW/2,y)}
+
+function draw(){
+ ctx.setTransform(S,0,0,S,0,0);ctx.fillStyle='#111';ctx.fillRect(0,0,WW,HH);
+ ctx.setTransform(S,0,0,S,M*S,M*S);
+ ctx.fillStyle='#808080';ctx.fillRect(0,0,MW,MH);
+ for(const [c0,type] of sp){const r=Math.floor(c0/C),c=c0%C,x=c*P+t,y=r*P+t;
+  if(type==='lava'){ctx.fillStyle=lavaOn?'#ff6a00':'#3a3a3a';ctx.fillRect(x,y,1,1.01)}}
+ ctx.fillStyle='#f2f2f2';
+ for(let j=0;j<=R;j++)for(let c=0;c<C;c++)if(hw[j][c])ctx.fillRect(c*P,j*P,P+t,t);
+ for(let r=0;r<R;r++)for(let i=0;i<=C;i++)if(vw[r][i])ctx.fillRect(i*P,r*P,t,P+t);
+ if(thinOn){const x=THIN[1]*P,y=THIN[0]*P;ctx.fillStyle='#fff';ctx.fillRect(x,y,P+t,t);ctx.strokeStyle='#d22';ctx.lineWidth=.09;ctx.strokeRect(x+.05,y+.05,P+t-.1,t-.1)}
+ for(const [c0,type] of sp){const r=Math.floor(c0/C),c=c0%C,x=c*P+t,y=r*P+t;
+  if(type==='door'){ctx.globalAlpha=hasKey?.3:1;ctx.fillStyle='#8b4513';ctx.fillRect(x,y,1,1);ctx.strokeStyle='#4a2508';ctx.lineWidth=.08;ctx.strokeRect(x+.04,y+.04,.92,.92);ctx.fillStyle='#ffd700';ctx.beginPath();ctx.arc(x+.5,y+.5,.2,0,6.3);ctx.fill();ctx.globalAlpha=1}
+  else if(type==='key'){ctx.strokeStyle='#f5c800';ctx.lineWidth=.1;ctx.beginPath();ctx.arc(x+.28,y+.5,.15,0,6.3);ctx.moveTo(x+.43,y+.5);ctx.lineTo(x+.9,y+.5);ctx.moveTo(x+.78,y+.5);ctx.lineTo(x+.78,y+.72);ctx.moveTo(x+.9,y+.5);ctx.lineTo(x+.9,y+.72);ctx.stroke()}
+  else if(type==='lever'){ctx.fillStyle='#222';ctx.fillRect(x+.15,y+.65,.7,.2);ctx.strokeStyle=leverOn?'#3c3':'#e33';ctx.lineWidth=.12;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x+.5,y+.7);ctx.lineTo(leverOn?x+.8:x+.2,y+.3);ctx.stroke();ctx.lineCap='butt'}
+  else if(type==='paper'){ctx.fillStyle='#fffbe0';ctx.fillRect(x+.25,y+.12,.5,.76);ctx.strokeStyle='#333';ctx.lineWidth=.04;for(let i=0;i<4;i++){ctx.beginPath();ctx.moveTo(x+.33,y+.28+i*.14);ctx.lineTo(x+.67,y+.28+i*.14);ctx.stroke()}}
+  else if(type==='safe'){ctx.fillStyle='#000';ctx.fillRect(x+.1,y+.1,.8,.8);ctx.fillStyle=solved?'#333':'#999';ctx.beginPath();ctx.arc(x+.5,y+.5,.2,0,6.3);ctx.fill()}
+  else if(type==='stairs'){ctx.fillStyle='#8b4513';ctx.fillRect(x+.1,y+.1,.8,.8);ctx.strokeStyle='#fff';ctx.lineWidth=.07;ctx.strokeRect(x+.1,y+.1,.8,.8)}}
+ for(const p of parts){ctx.globalAlpha=Math.min(1,p.l*1.5);ctx.fillStyle=p.c;ctx.beginPath();ctx.arc(p.x,p.y,.2,0,6.3);ctx.fill()}ctx.globalAlpha=1;
+ if(hasRPG){ctx.save();ctx.translate(px,py);ctx.rotate(fa);
+  ctx.fillStyle='#4b5a2a';ctx.fillRect(-.3,-.06,.8,.12);ctx.fillStyle='#222';ctx.fillRect(-.36,-.1,.1,.2);
+  ctx.fillStyle='#c0392b';ctx.beginPath();ctx.moveTo(.5,-.1);ctx.lineTo(.76,0);ctx.lineTo(.5,.1);ctx.fill();ctx.restore()}
+ ctx.fillStyle='#9b30d9';
+ for(const s of[-1,1]){ctx.beginPath();ctx.arc(px+s*.15,py,.15,0,6.3);ctx.fill()}
+ ctx.setTransform(S,0,0,S,0,0);
+ const now=performance.now();
+ if(msgT>now&&mode==='play')box(msgS,2.2,1.2);
+ if(mode==='code'){ctx.fillStyle='rgba(0,0,0,.88)';ctx.fillRect(WW/2-9,HH/2-6.5,18,8);ctx.fillStyle='#fff';ctx.font='1.4px sans-serif';ctx.textAlign='center';
+  ctx.fillText('Сейф: введи пароль',WW/2,HH/2-3.8);ctx.font='2.4px monospace';ctx.fillText((buf+'____').slice(0,4).split('').join(' '),WW/2,HH/2-0.8)}
+ if(mode==='win'){
+  ctx.fillStyle='rgba(0,0,0,.85)';ctx.fillRect(0,0,WW,HH);
+  ctx.fillStyle='#fff';ctx.textAlign='center';
+  ctx.font='3.2px sans-serif';ctx.fillText('Ти вибрався!',WW/2,HH/2-2.2);
+  ctx.font='1.4px sans-serif';ctx.fillText('Час: '+((tEnd-t0)/1000).toFixed(1)+' с',WW/2,HH/2+0.2);
+  ctx.fillStyle='#d290ff';ctx.font='1.2px sans-serif';ctx.fillText('Надішли цей скрін Аліні',WW/2,HH/2+2.3);
+  ctx.fillStyle='#aaa';ctx.font='1px sans-serif';ctx.fillText('Enter — зіграти ще раз',WW/2,HH/2+4.6);
+ }
+}
+
+let last=performance.now();
+function loop(n){const dt=Math.min(.05,(n-last)/1000);last=n;update(dt);draw();requestAnimationFrame(loop)}
+rs();newGame(true);requestAnimationFrame(loop);
+</script></body></html>
